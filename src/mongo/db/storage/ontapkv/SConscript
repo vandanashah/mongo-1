@@ -1,0 +1,15 @@
+Import("env")
+
+env.Library(
+	target='ontapkv',
+	source=[
+            'ontapkv_global_options.cpp',
+            'ontapkv_index.cpp',
+            'ontapkv_init.cpp',
+            'ontapkv_kv_engine.cpp',
+            'ontapkv_record_store_mock.cpp',
+            'ontapkv_recovery_unit_mock.cpp',
+	],
+	)
+
+

@@ -57,6 +57,7 @@ env.Library(
         'kv_database_catalog_entry_core',
         'kv_engine_core',
         'kv_storage_engine',
+        '$BUILD_DIR/mongo/db/storage/ontapkv/ontapkv',
         ],
     LIBDEPS_TAGS=[
         # Depends on symbols from serverOnlyFiles
