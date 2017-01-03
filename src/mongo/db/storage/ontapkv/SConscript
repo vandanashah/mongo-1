@@ -7,7 +7,9 @@ env.Library(
             'ontapkv_index.cpp',
             'ontapkv_init.cpp',
             'ontapkv_kv_engine.cpp',
-            'ontapkv_record_store_mock.cpp',
+            'ontapkv_record_store.cpp',
+            'ontapkv_cachemgr.cpp',
+            'ontapkv_iomgr_mock.cpp',
             'ontapkv_recovery_unit_mock.cpp',
 	],
 	)

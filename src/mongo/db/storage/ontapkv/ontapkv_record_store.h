@@ -55,6 +55,9 @@ class RecoveryUnit;
 class OntapKVCursor;
 class OntapKVRecoveryUnit;
 class OntapKVSizeStorer;
+class OntapKVContainerMgr;
+class OntapKVIOMgr;
+class OntapKVCacheMgr;
 
 extern const std::string kOntapKVEngineName;
 typedef std::list<RecordId> SortedRecordIds;
@@ -143,7 +146,7 @@ public:
                                               bool enforceQuota,
                                               UpdateNotifier* notifier);
 
-	RecordId getNextRecordId();
+//	RecordId getNextRecordId();
 	std::unique_ptr<SeekableRecordCursor> getCursor(OperationContext* txn,
                                                     bool forward) const ;
 	virtual bool updateWithDamagesSupported() const;
@@ -266,10 +269,10 @@ private:
 
     static OntapKVRecoveryUnit* _getRecoveryUnit(OperationContext* txn);
 
+#if 0
     static int64_t _makeKey(const RecordId& id);
     static RecordId _fromKey(int64_t k);
 
-#if 0
     void _dealtWithCappedId(SortedRecordIds::iterator it);
     void _addUncommitedRecordId_inlock(OperationContext* txn, const RecordId& id);
 
@@ -303,11 +306,11 @@ private:
     RecordId _oplog_highestSeen;
     mutable stdx::mutex _uncommittedRecordIdsMutex;
     OntapKVSizeStorer* _sizeStorer;  // not owned, can be NULL
-#endif
 	/* Map from RecordId->repr to RecordData
 	 * is out KV store*/
 	typedef	std::map<int64_t, RecordData> Records; 
 	Records _kvmap;
+#endif
     AtomicInt64 _nextIdNum;
     AtomicInt64 _dataSize;
     AtomicInt64 _numRecords;
@@ -321,8 +324,11 @@ private:
     int _sizeStorerCounter;
 
     bool _shuttingDown;
+    OntapKVContainerMgr *contMgr;
+    OntapKVIOMgr *ioMgr;
+    OntapKVCacheMgr *cacheMgr;
 
-    friend class OntapKVIterator;
+ //   friend class OntapKVIterator;
 };
 
 // WT failpoint to throw write conflict exceptions randomly
