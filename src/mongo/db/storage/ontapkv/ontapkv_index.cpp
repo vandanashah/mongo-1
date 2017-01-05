@@ -37,37 +37,125 @@ OntapKVIndex::getBulkBuilder(OperationContext* txn,
 	return new OntapKVBulkBuilderInterface();
 }
 
-#if 0
-class OntapKVIndexCursor final : public Cursor {
+class OntapKVIndexCursor final : public SortedDataInterface::Cursor {
 public:
 	OntapKVIndexCursor(OperationContext *txn,
+			const OntapKVIndex *index,
 			bool isForward) 
 		: _txn(txn),
-		_isForward(isForward)
-	{}
-	~OntapKVCursor() {}
+		_index(index),
+		_forward(isForward),
+		_curr(),
+		_eof(false) {}
 
-    boost::optional<Record> next() final;
-    boost::optional<Record> seekExact(const RecordId& id) final;
+	~OntapKVIndexCursor() {}
+
+	void setEndPosition(const BSONObj& key, bool inclusive) {
+		if (key.isEmpty()) {
+			_eof = true;
+			return;
+		} else {
+			_eof = false;
+		}
+		_curr = key;
+	}
+#if 0
+	{
+    		std::multimap<const BSONObj, RecordId>::const_iterator it ;
+		kk
+		it = _index->_kvindex.find(key);
+		if (_forward) {
+			_curr = _index->_kvindex.end()->first;
+		} else {
+			_curr = _index->_kvindex.begin()->first;
+		}
+	}
+#endif
+
+        boost::optional<IndexKeyEntry> next(RequestedInfo parts = kKeyAndLoc) { 
+		if (_eof) {
+			return boost::none;
+		}
+    	std::multimap<const BSONObj, RecordId>::const_iterator it;
+	switch (_forward) {
+		case true:
+		it = _index->_kvindex.lower_bound(_curr);
+		if (it != _index->_kvindex.end()) {
+			IndexKeyEntry ent(it->first, it->second);
+			++it;
+			if (it != _index->_kvindex.end()) {
+				_curr = it->first;
+			} else {
+				_eof = true;
+			}
+			return ent;
+		} else {
+			_eof = true;
+			BSONObj tmp;
+			_curr = tmp;
+			return boost::none;
+		}
+		break;
+		case false:	
+		it = _index->_kvindex.upper_bound(_curr);
+		if (it != _index->_kvindex.begin()) {
+			IndexKeyEntry ent(it->first, it->second);
+			++it;
+			if (it != _index->_kvindex.begin()) {
+				_curr = it->first;
+			} else {
+				_eof = true;
+			}
+			return ent;
+		} else {
+			_eof = true;
+			BSONObj tmp;
+			_curr = tmp;
+			return boost::none;
+		}
+		break;
+		default:
+		invariant(0);
+		return boost::none;
+	} //switch
+
+	}
+
+        boost::optional<IndexKeyEntry> seek(const BSONObj& key,
+                                            bool inclusive,
+                             RequestedInfo parts = kKeyAndLoc) {
+			
+    	std::multimap<const BSONObj, RecordId>::const_iterator it ;
+		it = _index->_kvindex.find(key);
+		if (it != _index->_kvindex.end()) {
+			return IndexKeyEntry(it->first, it->second);
+		}
+		return boost::none;
+	}
+
+        boost::optional<IndexKeyEntry> seek(const IndexSeekPoint& seekPoint,
+                                                    RequestedInfo parts = kKeyAndLoc) {
+
+		BSONObj key = IndexEntryComparison::makeQueryObject(seekPoint, _forward);
+		return seek(key, true, parts);
+	}
 
     void save() final {}
-    bool restore() final {
-        return true;
-    }
+    void restore() final {}
     void detachFromOperationContext() final {}
     void reattachToOperationContext(OperationContext* txn) final {}
 
 private:
 	OperationContext *_txn;
-	const bool _isForward;
-	int64_t _curr;
+	const OntapKVIndex *_index;
+	const bool _forward;
+	BSONObj _curr;
+	bool _eof;
 };
-#endif
 
 std::unique_ptr<SortedDataInterface::Cursor>
 OntapKVIndex::newCursor(OperationContext* txn, bool isForward) const {
-	invariant(0);
-        return {};
+        return stdx::make_unique<OntapKVIndexCursor>(txn, this, isForward);
 }
 
 OntapKVIndex::OntapKVIndex(OperationContext* ctx,
@@ -106,7 +194,8 @@ void OntapKVIndex::unindex(OperationContext* txn,
                          const RecordId& id,
                          bool dupsAllowed) {
 	std::cout <<" Someone unindexing\n";
-	invariant(0);
+	indexMap::iterator it = _kvindex.find(key);
+	_kvindex.erase(it);
 }
 
 void OntapKVIndex::fullValidate(OperationContext* txn,
