@@ -39,6 +39,7 @@
 #include "mongo/stdx/mutex.h"
 #include "mongo/util/elapsed_tracker.h"
 #include "mongo/db/storage/ontapkv/ontapkv_record_store.h"
+#include "mongo/db/storage/ontapkv/ontapkv_cachemgr.h"
 
 namespace mongo {
 
@@ -55,6 +56,7 @@ public:
 
     void setRecordStoreExtraOptions(const std::string& options);
     void setSortedDataInterfaceExtraOptions(const std::string& options);
+    int64_t nextRecordStoreID();
 
     virtual bool supportsDocLocking() const;
 
@@ -158,5 +160,7 @@ private:
     mutable Date_t _previousCheckedDropsQueued;
     typedef std::map<std::string, OntapKVRecordStore *> OntapKVStores;
 	OntapKVStores _recordStores;
+	OntapKVCacheMgr *cacheMgr;
+    AtomicInt64 _nextrsID;
 };
 }

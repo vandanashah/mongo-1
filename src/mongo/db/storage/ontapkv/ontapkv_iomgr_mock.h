@@ -29,7 +29,7 @@ private:
 
 class OntapKVIOMgr_mock : public OntapKVIOMgr {
 public:
-	OntapKVIOMgr_mock();
+	OntapKVIOMgr_mock(int64_t rsid);
 	/*
 	 * Write record persistently.
 	 * Input: Txn, container id, data and len

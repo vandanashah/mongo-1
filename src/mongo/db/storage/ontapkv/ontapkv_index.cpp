@@ -77,8 +77,9 @@ public:
 			return boost::none;
 		}
     	std::multimap<const BSONObj, RecordId>::const_iterator it;
-	switch (_forward) {
-		case true:
+	//switch (_forward) {
+	if (_forward) {
+	//	case true:
 		it = _index->_kvindex.lower_bound(_curr);
 		if (it != _index->_kvindex.end()) {
 			IndexKeyEntry ent(it->first, it->second);
@@ -95,8 +96,9 @@ public:
 			_curr = tmp;
 			return boost::none;
 		}
-		break;
-		case false:	
+	//	break;
+	} else {
+	//	case false:	
 		it = _index->_kvindex.upper_bound(_curr);
 		if (it != _index->_kvindex.begin()) {
 			IndexKeyEntry ent(it->first, it->second);
@@ -113,10 +115,10 @@ public:
 			_curr = tmp;
 			return boost::none;
 		}
-		break;
-		default:
-		invariant(0);
-		return boost::none;
+	//	break;
+	//	default:
+	//	invariant(0);
+	//	return boost::none;
 	} //switch
 
 	}

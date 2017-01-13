@@ -135,6 +135,8 @@ OntapKVRecordStore::OntapKVRecordStore(OperationContext* txn,
                   std::string engineName,
                   bool isCapped,
                   bool isEphemeral,
+		  OntapKVCacheMgr *cachemgr,
+		  int64_t rsID,
                   int64_t cappedMaxSize,
                   int64_t cappedMaxDocs) :
 	RecordStore(ns),
@@ -142,11 +144,11 @@ OntapKVRecordStore::OntapKVRecordStore(OperationContext* txn,
 	_engineName(engineName),
 	_isCapped(isCapped),
 	_isEphemeral(isEphemeral) {
-	_nextIdNum.store(1);
+	_nextIdNum.store((rsID << 32) | 1);
 	_shuttingDown = false;
 	contMgr = new OntapKVContainerMgr();
-	ioMgr = new OntapKVIOMgr_mock();
-	cacheMgr = new OntapKVCacheMgr();
+	ioMgr = new OntapKVIOMgr_mock(rsID);
+	cacheMgr = cachemgr;
 }
 
 OntapKVRecordStore::~OntapKVRecordStore() {
@@ -169,6 +171,7 @@ OntapKVRecordStore::insertRecord(OperationContext* txn,
 				bool enforceQuota)
 {
 	void *storageContext;
+	StorageContext cxt;
 
 	std::string containerId = contMgr->getContainerId(_ns);
 	/* ZERO copy ?? */
@@ -180,7 +183,8 @@ OntapKVRecordStore::insertRecord(OperationContext* txn,
 		return Status(ErrorCodes::BadValue, "Update failed");
 	}
 
-	cacheMgr->insert(txn, containerId, data,
+	cxt.setBytes((char *)"Context");
+	cacheMgr->insert(txn, std::stoi("1234"), data, cxt,
 				len, s.getValue());
 	
 	_changeNumRecords(txn, 1);
@@ -211,7 +215,7 @@ bool OntapKVRecordStore::findRecord(OperationContext* txn,
 	std::string containerId = contMgr->getContainerId(_ns);
 
 	/* Copy data or give out reference ?*/
-	int result = cacheMgr->lookup(txn, containerId, id,
+	int result = cacheMgr->lookup(txn, std::stoi("1234"), id,
 			&cxt, out);
 	if (result == KVCACHE_FOUND) {
 		invariant(out != NULL);
@@ -265,7 +269,7 @@ void OntapKVRecordStore::deleteRecord(
 	
 	std::string containerId = contMgr->getContainerId(_ns);
 	ioMgr->deleteRecord(txn, containerId, id);
-	cacheMgr->invalidate(txn, containerId, id);
+	cacheMgr->invalidate(txn, std::stoi("1234"), id);
 	_changeNumRecords(txn, -1);
 #define LENGTH_BLAH 400
 	int length = LENGTH_BLAH;
@@ -293,6 +297,7 @@ OntapKVRecordStore::updateRecord(OperationContext* txn,
 				UpdateNotifier* notifier) {
 
 	void *storageContext;
+	StorageContext cxt;
 
 	std::string containerId = contMgr->getContainerId(_ns);
 	/* ZERO copy ?? */
@@ -304,9 +309,10 @@ OntapKVRecordStore::updateRecord(OperationContext* txn,
 		return Status(ErrorCodes::BadValue, "Update failed");
 	}
 
+	cxt.setBytes((char *)"Context");
 	/* For now assume this will work if record already exists */
-	cacheMgr->insert(txn, containerId, data,
-				len, s.getValue());
+	cacheMgr->insert(txn, std::stoi("1234"), data,
+				cxt, len, s.getValue());
 	
 	/* FIXME: adjust delta
 	_increaseDataSize(txn, len - oldLen); */

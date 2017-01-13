@@ -50,8 +50,9 @@ OntapKVIterator_mock::seekExact(const RecordId& id) {
 boost::optional<Record> OntapKVIterator_mock::next() {
 	std::map<int64_t, RecordData>::const_iterator iter;	
 	int64_t searchKey;
-	switch (_forward) {
-		case true:
+	//switch (_forward) {
+	if (_forward) {
+		//case true:
 		if (_curr == LLONG_MAX) {
 			return boost::none;
 		}
@@ -70,8 +71,9 @@ boost::optional<Record> OntapKVIterator_mock::next() {
 			_curr = LLONG_MAX;
 			return boost::none;
 		}
-		break;
-		case false:
+		//break;
+	} else { 
+		//case false:
 		if (_curr == LLONG_MIN) {
 			return boost::none;
 		}
@@ -90,10 +92,10 @@ boost::optional<Record> OntapKVIterator_mock::next() {
 			_curr = LLONG_MIN;
 			return boost::none;
 		}
-		break;
+	//	break;
 
-		default:
-		invariant (0);
+	//	default:
+	//	invariant (0);
 	}
 	return boost::none;
 }
@@ -121,10 +123,10 @@ OntapKVRecordStore::~OntapKVRecordStore() {
 }
 #endif
 
-OntapKVIOMgr_mock::OntapKVIOMgr_mock() :
+OntapKVIOMgr_mock::OntapKVIOMgr_mock(int64_t rsid) :
 	OntapKVIOMgr() {
 		std::cout << "IOMgr begins \n";
-		_nextIdNum.store(1);
+		_nextIdNum.store((rsid << 32) | 1);
 	}
 
 

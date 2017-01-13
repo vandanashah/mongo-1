@@ -93,6 +93,8 @@ public:
                           std::string engineName,
                           bool isCapped,
                           bool isEphemeral,
+			  OntapKVCacheMgr *cacheMgr,	
+			  int64_t rsid,
                           int64_t cappedMaxSize = -1,
                           int64_t cappedMaxDocs = -1);
 

@@ -40,6 +40,7 @@
 #include "mongo/db/storage/ontapkv/ontapkv_recovery_unit.h"
 #include "mongo/db/storage/ontapkv/ontapkv_record_store.h"
 #include "mongo/db/storage/ontapkv/ontapkv_index.h"
+//#include "mongo/db/storage/ontapkv/ontapkv_cachemgr.h"
 
 namespace mongo {
 
@@ -60,10 +61,16 @@ OntapKVEngine::OntapKVEngine(const std::string& canonicalName,
 			<<path
 			<<cacheSizeGB
 			<<"\n";
+	cacheMgr = new OntapKVCacheMgr();
+	_nextrsID.store(1);
 }
 
 OntapKVEngine::~OntapKVEngine() {
 	std::cout<<"Bye Bye from OntapKVEngine\n";
+}
+
+int64_t OntapKVEngine::nextRecordStoreID() {
+	return _nextrsID.fetchAndAdd(1);
 }
 
 RecoveryUnit* OntapKVEngine::newRecoveryUnit() {
@@ -83,7 +90,8 @@ Status OntapKVEngine::createRecordStore(OperationContext* opCtx,
 		std::cout<<"RecordStore for "<<ns.toString()<<"EXISTS\n";
 		return Status::OK();
 	}
-	rs = new OntapKVRecordStore(opCtx, ns, ident, "OntapKVEngine", false, false); 
+	int64_t rsID = nextRecordStoreID();
+	rs = new OntapKVRecordStore(opCtx, ns, ident, "OntapKVEngine", false, false, cacheMgr, rsID); 
 	invariant(rs);
 	_recordStores[ns.toString()] = rs;
 	return Status::OK();
