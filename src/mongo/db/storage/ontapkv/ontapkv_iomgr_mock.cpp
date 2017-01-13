@@ -142,7 +142,7 @@ OntapKVIOMgr_mock::writeRecord(OperationContext* txn,
 				std::string contid,
 				const char* data,
 				int len,
-				void *storageContext)
+				kv_storage_hint_t *hint)
 {
 	RecordId id = getNextRecordId();
 	//_changeNumRecords(txn, 1);
@@ -169,15 +169,17 @@ RecordData OntapKVIOMgr_mock::dataFor(
 		const RecordId& id) {
 	RecordData rd;
 	std::string nocontainer;
-	void *sto_ctx;
-	readRecord(txn, nocontainer, id, sto_ctx, &rd);
+	kv_storage_hint_t hint;
+
+	bzero(&hint, sizeof(hint));
+	readRecord(txn, nocontainer, id, &hint, &rd);
 	return rd;
 }
 
 bool OntapKVIOMgr_mock::readRecord(OperationContext* txn,
 				    std::string contid,
 					const RecordId& id,
-					void *storageContext,
+					kv_storage_hint_t *hint,
 					RecordData* out) {
 	int64_t key = _makeKey(id);
 	Records::const_iterator it = _kvmap.find(key);
@@ -273,12 +275,12 @@ OntapKVIOMgr_mock::updateRecord(OperationContext* txn,
 				const RecordId& oldLocation,
 				const char* data,
 				int len,
-		        	void *storageContext) {
+		        	kv_storage_hint_t *hint) {
 	Records::const_iterator it = _kvmap.find(_makeKey(oldLocation));
 
 	/* New record */
 	if (it == _kvmap.end()) {
-		return writeRecord(txn, contid, data, len, storageContext);
+		return writeRecord(txn, contid, data, len, hint);
 	}
 	//const char *oldData = it->second.data();
 	//_increaseDataSize(txn, len - oldLen);

@@ -20,7 +20,7 @@
 
 namespace mongo {
 int OntapKVCacheMgr::lookup(OperationContext *txn, int32_t container,
-		   const RecordId& id, StorageContext *cxt,
+		   const RecordId&, kv_storage_hint_t *hint,
 		   RecordData *out) {
 	int64_t key = generateKey(container, id);
 	int index = generateHashKey(key);

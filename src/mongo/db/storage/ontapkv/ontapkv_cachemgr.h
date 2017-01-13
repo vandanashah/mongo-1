@@ -6,6 +6,7 @@
 #include "mongo/util/concurrency/synchronization.h"
 #include "mongo/util/fail_point_service.h"
 #include <iostream>
+#include "mongo/db/storage/ontapkv/kv_format.h"
 
 
 /*
@@ -154,6 +155,7 @@ public:
 	int64_t getKey() {
 		return (((int64_t) this->_container) + (this->_id).repr());
 	}
+	//kv_storage_hint_t getMetadata(void) {return hint;}
 
 private:
 	int32_t _container;
@@ -162,6 +164,7 @@ private:
 	int data_len;
 	StorageUberContext ctx;
         OntapKVCacheEntry *next;
+	//kv_storage_hint_t hint;
 };
 
 /*
@@ -198,6 +201,8 @@ public:
 
 	int lookup(OperationContext *txn, int32_t container,
 		   const RecordId& id, StorageContext *cxt,
+	//int lookup(OperationContext *txn, std::string container,
+	//	   const RecordId&, kv_storage_hint_t *hint,
 		   RecordData *out);
 	bool insert(OperationContext *txn, int32_t container,
 		const char *data, StorageContext cxt,

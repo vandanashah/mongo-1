@@ -1,3 +1,4 @@
+
 #include "mongo/db/catalog/collection_options.h"
 #include "mongo/db/storage/capped_callback.h"
 #include "mongo/db/storage/record_store.h"
@@ -10,8 +11,9 @@
 #pragma once
 
 namespace mongo {
-class OntapKVIOMgr_mock;
 
+#if 0
+class OntapKVIOMgrIPC;
 class OntapKVIterator_mock : public OntapKVIterator {
 public:
 	OntapKVIterator_mock(OperationContext *txn,
@@ -27,9 +29,10 @@ private:
     	int64_t _curr;
 };
 
-class OntapKVIOMgr_mock : public OntapKVIOMgr {
+#endif
+class OntapKVIOMgrIPC : public OntapKVIOMgr {
 public:
-	OntapKVIOMgr_mock(int64_t rsid);
+	OntapKVIOMgrIPC() { std::cout << "IOMgrIPC Constructor\n";}
 	/*
 	 * Write record persistently.
 	 * Input: Txn, container id, data and len
@@ -39,18 +42,16 @@ public:
 	StatusWith<RecordId> writeRecord(OperationContext *txn,
 			std::string contid,
 			const char *data,
-		        int len, 
-			kv_storage_hint_t *hint);
+		        int len, kv_storage_hint_t *storageHint);
 	StatusWith<RecordId> updateRecord(OperationContext *txn,
 			std::string contid,
 			const RecordId &id,
 			const char *data,
-		        int len,
-			kv_storage_hint_t *hint);
+		        int len, kv_storage_hint_t *storageHint);
 	bool readRecord(OperationContext *txn,
 		       std::string contid,
 		       const RecordId &id,
-			kv_storage_hint_t *hint,
+		       kv_storage_hint_t *storageHint,
 		       RecordData *out);
 	void deleteRecord(OperationContext *txn,
 		       	  std::string contid,
@@ -63,6 +64,7 @@ public:
 //			OntapKVIOMgr *mgr,
 			bool forward); 
 private:
+#if 0
 	/* Map from RecordId->repr to RecordData
 	 * is out KV store*/
 	typedef	std::map<int64_t, RecordData> Records; 
@@ -72,7 +74,6 @@ private:
 	RecordId getNextRecordId();
 	RecordId _fromKey(int64_t k); 
 	int64_t _makeKey(const RecordId& id); 
-#if 0
 	void _increaseDataSize(
 		OperationContext *txn, int64_t amount); 
 	void _changeNumRecords(OperationContext *txn, int64_t diff); 
