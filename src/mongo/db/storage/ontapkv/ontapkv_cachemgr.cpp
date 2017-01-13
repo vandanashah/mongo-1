@@ -20,7 +20,7 @@
 
 namespace mongo {
 int OntapKVCacheMgr::lookup(OperationContext *txn, std::string container,
-		   const RecordId&, StorageContext *cxt,
+		   const RecordId&, kv_storage_hint_t *hint,
 		   RecordData *out) {
 	return KVCACHE_NOT_FOUND;
 }

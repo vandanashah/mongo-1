@@ -19,115 +19,10 @@
 #include "mongo/db/storage/ontapkv/ontapkv_cachemgr.h"
 //#include "mongo/db/storage/ontapkv/ontapkv_iomgr.h"
 #include "mongo/db/storage/ontapkv/ontapkv_iomgr_mock.h"
+#include "mongo/db/storage/ontapkv/ontapkv_iomgr_ipc.h"
+#include "mongo/db/storage/ontapkv/kv_format.h"
 #include <climits>
 namespace mongo {
-
-#if 0
-const int64_t firstRecordId = 1;
-class OntapKVIterator final : public SeekableRecordCursor {
-public:
-	OntapKVIterator(OperationContext *txn,
-			const OntapKVRecordStore *rs,
-			bool forward);
-	~OntapKVIterator() {}
-
-    boost::optional<Record> next() final;
-    boost::optional<Record> seekExact(const RecordId& id) final;
-
-    void save() final {}
-    bool restore() final {
-        return true;
-    }
-    void detachFromOperationContext() final {}
-    void reattachToOperationContext(OperationContext* txn) final {}
-
-private:
-	OperationContext *_txn;
-	const OntapKVRecordStore * const _rs;
-	const bool _forward;
-	int64_t _curr;
-};
-
-OntapKVIterator::OntapKVIterator(OperationContext *txn,
-			const OntapKVRecordStore *rs,
-			bool forward) :
-	_txn(txn),
-	_rs(rs),
-	_forward(forward),
-	_curr(0) {
-	ioMgr->createIterator();	
-	}
-
-
-boost::optional<Record>
-OntapKVIterator::seekExact(const RecordId& id) {
-	RecordData rd;
-	if (findRecord(txn, id, &rd) == false) {
-		return {};
-	}
-	return {{id, rd}};
-}
-
-boost::optional<Record> OntapKVIterator::next() {
-	_rs->ioMgr->getNext();
-}
-/*
- * keep the id from where to move.
- * On call to next,
- * If it is forward going (lower to higher) use lower_bound iterator
- * else use upper bound iterator
-*/
-boost::optional<Record> OntapKVIterator::next() {
-	std::map<int64_t, RecordData>::const_iterator iter;	
-	int64_t searchKey;
-	switch (_forward) {
-		case true:
-		if (_curr == LLONG_MAX) {
-			return boost::none;
-		}
-		searchKey = _curr == 0 ? firstRecordId : _curr;
-		iter = _rs->_kvmap.lower_bound(searchKey);
-		if (iter != _rs->_kvmap.end()) {
-			Record r = {_rs->_fromKey(iter->first),
-				RecordData(iter->second.data(), iter->second.size())};
-			if (++iter == _rs->_kvmap.end()) {
-				_curr = LLONG_MAX;
-			} else {
-				_curr = iter->first;
-			}
-			return r;
-		} else {
-			_curr = LLONG_MAX;
-			return boost::none;
-		}
-		break;
-		case false:
-		if (_curr == LLONG_MIN) {
-			return boost::none;
-		}
-		searchKey = _curr == 0 ? _rs->_nextIdNum.load() : _curr;
-		iter = _rs->_kvmap.upper_bound(searchKey);
-		if (iter != _rs->_kvmap.begin()) {
-			Record r = {_rs->_fromKey(iter->first),
-				RecordData(iter->second.data(), iter->second.size())};
-			if (--iter == _rs->_kvmap.begin()) {
-				_curr = LLONG_MIN;
-			} else {
-				_curr = iter->first;
-			}
-			return r;
-		} else {
-			_curr = LLONG_MIN;
-			return boost::none;
-		}
-		break;
-
-		default:
-		invariant (0);
-	}
-	return boost::none;
-}
-#endif
 
 OntapKVRecordStore::OntapKVRecordStore(OperationContext* txn,
                   StringData ns,
@@ -145,7 +40,7 @@ OntapKVRecordStore::OntapKVRecordStore(OperationContext* txn,
 	_nextIdNum.store(1);
 	_shuttingDown = false;
 	contMgr = new OntapKVContainerMgr();
-	ioMgr = new OntapKVIOMgr_mock();
+	ioMgr = new OntapKVIOMgrIPC();
 	cacheMgr = new OntapKVCacheMgr();
 }
 
@@ -168,13 +63,13 @@ OntapKVRecordStore::insertRecord(OperationContext* txn,
 				int len,
 				bool enforceQuota)
 {
-	void *storageContext;
+	kv_storage_hint_t hint;
 
 	std::string containerId = contMgr->getContainerId(_ns);
 	/* ZERO copy ?? */
 	StatusWith<RecordId> s = ioMgr->writeRecord(txn, containerId,
 						    data, len,
-							storageContext);
+							&hint);
 	if (!s.isOK()) {
 		/* FIXME */
 		return Status(ErrorCodes::BadValue, "Update failed");
@@ -205,22 +100,22 @@ RecordData OntapKVRecordStore::dataFor(
 bool OntapKVRecordStore::findRecord(OperationContext* txn,
 					const RecordId& id,
 					RecordData* out) const {
-	StorageContext cxt;
+	kv_storage_hint_t hint;
 	RecordData rd;
 
 	std::string containerId = contMgr->getContainerId(_ns);
 
 	/* Copy data or give out reference ?*/
 	int result = cacheMgr->lookup(txn, containerId, id,
-			&cxt, out);
+			&hint, out);
 	if (result == KVCACHE_FOUND) {
 		invariant(out != NULL);
 		return true;
 	}
 	if (result == KVCACHE_NOT_FOUND) {
-		bzero(&cxt, sizeof(cxt));
+		bzero(&hint, sizeof(hint));
 	}
-	return ioMgr->readRecord(txn, containerId, id, &cxt, out);
+	return ioMgr->readRecord(txn, containerId, id, &hint, out);
 }
 
 void OntapKVRecordStore::_increaseDataSize(
@@ -292,13 +187,13 @@ OntapKVRecordStore::updateRecord(OperationContext* txn,
 				bool enforceQuota,
 				UpdateNotifier* notifier) {
 
-	void *storageContext;
+	kv_storage_hint_t hint;
 
 	std::string containerId = contMgr->getContainerId(_ns);
 	/* ZERO copy ?? */
 	StatusWith<RecordId> s = ioMgr->updateRecord(txn, containerId,
 						    oldLocation, data, len,
-							storageContext);
+							&hint);
 	if (!s.isOK()) {
 		/* FIXME */
 		return Status(ErrorCodes::BadValue, "Update failed");

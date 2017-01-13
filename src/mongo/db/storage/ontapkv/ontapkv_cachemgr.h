@@ -6,6 +6,7 @@
 #include "mongo/util/concurrency/synchronization.h"
 #include "mongo/util/fail_point_service.h"
 #include <iostream>
+#include "mongo/db/storage/ontapkv/kv_format.h"
 
 
 /*
@@ -30,13 +31,13 @@ private:
 class OntapKVCacheEntry {
 public:
 	bool hasData(void) { return _data != NULL;}
-	StorageContext getMetadata(void) {return _cxt;}
+	kv_storage_hint_t getMetadata(void) {return hint;}
 
 private:
 	std::string _container;
 	RecordId _id; // Most likely not needed
 	void *_data;
-	StorageContext _cxt;
+	kv_storage_hint_t hint;
 };
 
 /*
@@ -54,7 +55,7 @@ public:
 //	OntapKVCacheMgr() { std::cout<<"CacheMgr: Hello \n"; }
 	~OntapKVCacheMgr() { std::cout<<"CacheMgr: Bye Bye\n"; }
 	int lookup(OperationContext *txn, std::string container,
-		   const RecordId&, StorageContext *cxt,
+		   const RecordId&, kv_storage_hint_t *hint,
 		   RecordData *out);
 	bool insert(OperationContext *txn, std::string container,
 		const char *data,

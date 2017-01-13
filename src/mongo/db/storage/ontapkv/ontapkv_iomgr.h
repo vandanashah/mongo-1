@@ -5,6 +5,7 @@
 #include "mongo/stdx/mutex.h"
 #include "mongo/util/concurrency/synchronization.h"
 #include "mongo/util/fail_point_service.h"
+#include "mongo/db/storage/ontapkv/kv_format.h"
 
 #pragma once
 
@@ -47,16 +48,16 @@ public:
 	virtual StatusWith<RecordId> writeRecord(OperationContext *txn,
 			std::string contid,
 			const char *data,
-		        int len, void *storageContext) = 0;
+		        int len, kv_storage_hint_t *hint) = 0;
 	virtual StatusWith<RecordId> updateRecord(OperationContext *txn,
 			std::string contid,
 			const RecordId &id,
 			const char *data,
-		        int len, void *storageContext) = 0;
+		        int len, kv_storage_hint_t *hint) = 0;
 	virtual bool readRecord(OperationContext *txn,
 		       std::string contid,
 		       const RecordId &id,
-		       void *storageContext,
+		       kv_storage_hint_t *hint,
 		       RecordData *out) = 0;
 	virtual void deleteRecord(OperationContext *txn,
 			std::string contid,

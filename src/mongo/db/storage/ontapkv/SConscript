@@ -10,6 +10,7 @@ env.Library(
             'ontapkv_record_store.cpp',
             'ontapkv_cachemgr.cpp',
             'ontapkv_iomgr_mock.cpp',
+            'ontapkv_iomgr_ipc.cpp',
             'ontapkv_recovery_unit_mock.cpp',
 	],
 	)
