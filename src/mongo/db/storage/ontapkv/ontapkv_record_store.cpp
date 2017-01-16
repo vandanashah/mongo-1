@@ -42,9 +42,9 @@ OntapKVRecordStore::OntapKVRecordStore(OperationContext* txn,
 	_nextIdNum.store((rsID << 32) | 1);
 	_shuttingDown = false;
 	contMgr = new OntapKVContainerMgr();
-	ioMgr = new OntapKVIOMgr_mock(rsID);
+	//ioMgr = new OntapKVIOMgr_mock(rsID);
 	cacheMgr = cachemgr;
-	//ioMgr = new OntapKVIOMgrIPC();
+	ioMgr = new OntapKVIOMgrIPC(rsID);
 }
 
 OntapKVRecordStore::~OntapKVRecordStore() {
@@ -78,8 +78,7 @@ OntapKVRecordStore::insertRecord(OperationContext* txn,
 		return Status(ErrorCodes::BadValue, "Update failed");
 	}
 
-	cxt.setBytes((char *)"Context");
-	cacheMgr->insert(txn, std::stoi("1234"), data, cxt,
+	cacheMgr->insert(txn, std::stoi("1234"), data, hint,
 				len, s.getValue());
 	
 	_changeNumRecords(txn, 1);
@@ -203,10 +202,10 @@ OntapKVRecordStore::updateRecord(OperationContext* txn,
 		return Status(ErrorCodes::BadValue, "Update failed");
 	}
 
-	cxt.setBytes((char *)"Context");
+	//cxt.setBytes((char *)"Context");
 	/* For now assume this will work if record already exists */
 	cacheMgr->insert(txn, std::stoi("1234"), data,
-				cxt, len, s.getValue());
+				hint, len, s.getValue());
 	
 	/* FIXME: adjust delta
 	_increaseDataSize(txn, len - oldLen); */

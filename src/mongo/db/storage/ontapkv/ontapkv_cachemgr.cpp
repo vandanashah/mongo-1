@@ -20,7 +20,7 @@
 
 namespace mongo {
 int OntapKVCacheMgr::lookup(OperationContext *txn, int32_t container,
-		   const RecordId&, kv_storage_hint_t *hint,
+		   const RecordId& id, kv_storage_hint_t *hint,
 		   RecordData *out) {
 	int64_t key = generateKey(container, id);
 	int index = generateHashKey(key);
@@ -44,14 +44,14 @@ int OntapKVCacheMgr::lookup(OperationContext *txn, int32_t container,
 			char *data = (char *) entry->getData();
 			StorageUberContext metadata = entry->getMetadata();
 			DataContext data_ctx = metadata.getContext();
-			StorageContext storage_ctx = metadata.getHint();
-			if (storage_ctx.size() != data_ctx.getContext()) {
+			kv_storage_hint_t storage_ctx = metadata.getHint();
+			if (sizeof(storage_ctx) != data_ctx.getContext()) {
 				// Invalidate
 				invalidate(txn, container, id);
 				return KVCACHE_NOT_FOUND;
 			} else {
 				// Copy metadata into cxt pointer
-				memcpy(cxt, &storage_ctx, storage_ctx.size());
+				memcpy(hint, &storage_ctx, sizeof(storage_ctx));
 				if (data == NULL) {
 					return KVCACHE_MD_ONLY;
 				} else {
@@ -67,7 +67,7 @@ int OntapKVCacheMgr::lookup(OperationContext *txn, int32_t container,
 }
 
 bool OntapKVCacheMgr::insert(OperationContext *txn, int32_t container,
-		const char *data, StorageContext cxt,
+		const char *data, kv_storage_hint_t cxt,
 		int len, RecordId id) {
 	int64_t key = generateKey(container, id);
 	int index = generateHashKey(key);
@@ -92,7 +92,7 @@ bool OntapKVCacheMgr::insert(OperationContext *txn, int32_t container,
 }
 
 bool OntapKVCacheMgr::update(OperationContext *txn, int32_t container, const char *data,
-		StorageContext cxt, int len, RecordId id) {
+		kv_storage_hint_t cxt, int len, RecordId id) {
 	int64_t key = generateKey(container, id);
 	int index = generateHashKey(key);
 	invariant(index < CACHE_SIZE);

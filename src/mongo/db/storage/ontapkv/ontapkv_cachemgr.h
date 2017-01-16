@@ -38,22 +38,11 @@ private:
 	int ctx;
 };
 
-class StorageContext {
-public:
-	int size() {return sizeof(_bytes);}
-	
-	void setBytes(char *bytes) {
-		memcpy(this->_bytes, bytes, 16);
-	}
-private:
-	char _bytes[16]; // kv_storage_hint_t should replace it
-};
-		
 class StorageUberContext {
 public:
 	int size() {return sizeof(hint); }
 	
-	StorageContext getHint() {
+	kv_storage_hint_t getHint() {
 		return hint;
 	}
 
@@ -68,24 +57,24 @@ public:
 		return storage_ctx;
 	}
 
-	void setHint(StorageContext hint) {
+	void setHint(kv_storage_hint_t hint) {
 		this->hint = hint;
 	}
 
-	void setDataContext(StorageContext hint) {
+	void setDataContext(kv_storage_hint_t hint) {
 		DataContext data_ctx;
-		data_ctx.setContext(hint.size());
+		data_ctx.setContext(sizeof(hint));
 		this->ctx = data_ctx;
 	}
 private:
-	StorageContext hint;
+	kv_storage_hint_t hint;
 	DataContext ctx;	
 };
 
 class OntapKVCacheEntry {
 public:
 	OntapKVCacheEntry(int32_t cont_id, RecordId id,
-			  StorageContext ctx, void *data,
+			  kv_storage_hint_t ctx, void *data,
 			  int len,	
 			  OntapKVCacheEntry *next) {
 		this->_container = cont_id;
@@ -102,7 +91,7 @@ public:
 		return ctx;
 	}
 
-	void setMetadata(StorageContext hint) {
+	void setMetadata(kv_storage_hint_t hint) {
 		StorageUberContext sto_ctx;
 		sto_ctx.setHint(hint);
 		sto_ctx.setDataContext(hint);
@@ -155,7 +144,6 @@ public:
 	int64_t getKey() {
 		return (((int64_t) this->_container) + (this->_id).repr());
 	}
-	//kv_storage_hint_t getMetadata(void) {return hint;}
 
 private:
 	int32_t _container;
@@ -164,7 +152,6 @@ private:
 	int data_len;
 	StorageUberContext ctx;
         OntapKVCacheEntry *next;
-	//kv_storage_hint_t hint;
 };
 
 /*
@@ -200,15 +187,13 @@ public:
 	}
 
 	int lookup(OperationContext *txn, int32_t container,
-		   const RecordId& id, StorageContext *cxt,
-	//int lookup(OperationContext *txn, std::string container,
-	//	   const RecordId&, kv_storage_hint_t *hint,
+		   const RecordId& id, kv_storage_hint_t *hint,
 		   RecordData *out);
 	bool insert(OperationContext *txn, int32_t container,
-		const char *data, StorageContext cxt,
+		const char *data, kv_storage_hint_t hint,
 		int len, RecordId id);
 	bool update(OperationContext *txn, int32_t container, const char *data, 
-		StorageContext cxt, int len,
+		kv_storage_hint_t hint, int len,
 		RecordId id);
 	bool invalidate(OperationContext *txn, int32_t container, RecordId id);
 private:

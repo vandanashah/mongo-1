@@ -237,6 +237,11 @@ void Request::prepareGetOne(std::string contid,
 	memcpy(_buf+sizeof(kv_hdr) + sizeof(kv_get), idBuf.c_str(), kv_get.kvreq_get_keylen); 
 }
 
+int64_t OntapKVIOMgrIPC::getNextRecordId()
+{
+        return _nextIdNum.fetchAndAdd(1);
+}
+
 StatusWith<RecordId> 
 OntapKVIOMgrIPC::writeRecord(OperationContext* txn,
 				std::string contid,
@@ -246,13 +251,13 @@ OntapKVIOMgrIPC::writeRecord(OperationContext* txn,
 
 	IPCConnection conn(SERVER, PORT);
 	Request req(KV_PUT_ONE);
-	RecordId dummy;
 	kvresp_put_one_t respHeader;
 	int64_t recId;
 	Response resp;
 	
 	
-	req.preparePutOne(contid, data, len, dummy);
+	recId = getNextRecordId();
+	req.preparePutOne(contid, data, len, RecordId(recId));
 	conn.sendRequest(req.getBuf(), req.getLen());
 	conn.recvResponse((char *)&respHeader, sizeof(respHeader));
 	if (!resp.parsePutResponse((char *)&respHeader, storageHint, &recId)) {
