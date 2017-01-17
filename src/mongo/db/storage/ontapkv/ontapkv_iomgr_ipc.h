@@ -32,9 +32,9 @@ private:
 #endif
 class OntapKVIOMgrIPC : public OntapKVIOMgr {
 public:
-       OntapKVIOMgrIPC(int64_t rsid) {
+       OntapKVIOMgrIPC(int64_t rsid) : _rsid(rsid<<32) {
 		 std::cout << "IOMgrIPC Constructor\n";
-		_nextIdNum.store((rsid << 32) | 1);
+		_nextIdNum.store((_rsid << 32) | 0);
        }
        /*
         * Write record persistently.
@@ -83,9 +83,11 @@ private:
        void _changeNumRecords(OperationContext *txn, int64_t diff);
 #endif
 
+       int64_t getRsid() { return _rsid; }
        AtomicInt64 _nextIdNum;
+       int64_t  _rsid;
 
        int64_t getNextRecordId();
-       friend class OntapKVIterator_mock;
+       friend class OntapKVIteratorIPC;
 };
 }// mongo

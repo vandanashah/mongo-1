@@ -12,6 +12,11 @@ typedef enum kvreq_type {
 	KV_LAST_REQ_TYPE = KV_DEL_BULK
 } kvreq_type_t;
 
+typedef enum kvresp_type {
+	KV_PUT_ONE_RESP = 1,
+	KV_GET_ONE_RESP
+} kvresp_type_t;
+
 typedef enum kvresp_code {
 	KV_NO_ERROR = 0,
 	KV_NO_CONTAINER,
@@ -29,7 +34,7 @@ typedef struct kvreq_header_s {
 	int32_t kvreq_flags:16;
 	kvreq_type_t kvreq_type;
 	uint32_t kvreq_container_id;
-} __attribute__((__packed__)) kvreq_header_t;
+}  __attribute__((__packed__)) kvreq_header_t;
 
 typedef struct kvreq_struct_s {
 	kvreq_header_t kvreq_header;
@@ -42,14 +47,13 @@ typedef struct kvreq_struct_s {
 typedef struct kvreq_get_one_s {
 	kv_storage_hint_t kvreq_get_hint;
 	int32_t kvreq_get_keylen;
-	/* Key follows */
-//	void *kvreq_get_key;
+	/* This is followed by the key */
 } __attribute__((__packed__)) kvreq_get_one_t;
 
 typedef struct kvreq_put_one_s {
 	int32_t kvreq_put_keylen;
 	int32_t kvreq_put_datalen;
-	kv_txn_id kvreq_put_txnid;
+	kv_txn_id kvreq_put_txn_id;
 	/* This is followed by key and data values */
 } __attribute__((__packed__)) kvreq_put_one_t;
 
@@ -66,15 +70,14 @@ typedef struct kvreq_get_bulk_s {
  * Response format
  */ 
 typedef struct kvresp_get_one_s {
+	kvresp_type_t kvresp_type;
 	kvresp_code_t kvresp_get;
-	kv_storage_hint_t kvresp_get_hint;
-	int kvresp_get_datalen;
-	/* data followes */
-	//void *kvresp_get_data;
+	int32_t kvresp_get_datalen;
+	/* This is followed by key and data values */
 } __attribute__((__packed__)) kvresp_get_one_t;
 
 typedef struct kvresp_put_one_s {
-	int64_t	     kvresp_record_id;
+	kvresp_type_t kvresp_type;
 	kvresp_code_t kvresp_put;
 	kv_storage_hint_t kvresp_put_hint;
 } __attribute__((__packed__)) kvresp_put_one_t;

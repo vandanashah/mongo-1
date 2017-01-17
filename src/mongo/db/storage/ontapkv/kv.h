@@ -1,9 +1,10 @@
+
 #ifndef _KV_H_
 #define _KV_H_
 
-#include <uuid/uuid.h>
-#include <stdint.h>
+//#include <wafl/basetypes.h>
 
+#define KV_MAX_KEY_SIZE 64
 /*
  * This is for libkv. Here just for reference
  */ 
@@ -13,8 +14,10 @@ typedef struct libkv_context_s {
 } libkv_context_t;
 
 typedef struct kv_loc_s {
+	uint32_t kvl_fsid;
 	uint64_t kvl_pvbn; /* For now it is just the pvbn */
-} kv_loc_t;
+	uint32_t kvl_offset;
+} __attribute__((__packed__)) kv_loc_t;
 
 /*
  * Copied from wafl context
@@ -30,6 +33,7 @@ typedef struct kv_storage_context_s {
  */
 typedef struct kv_storage_hint_s {
 	kv_loc_t kvsh_loc;
+//	char kvsh_key[KV_MAX_KEY_SIZE];
 	kv_storage_context_t kvsh_cxt;
 } kv_storage_hint_t;
 
@@ -49,7 +53,7 @@ typedef uint32_t kv_txn_id;
  * Returns 0 on success, non-zero error code on failure
  */
 int
-kv_get(uuid_t storage_uuid, /* Vvol uuid */
+kv_get(uid_t storage_uuid, /* Vvol uuid */
        uint8_t *key,
        int keylen,
        void *data,
@@ -58,7 +62,7 @@ kv_get(uuid_t storage_uuid, /* Vvol uuid */
        kv_storage_hint_t *outhint); /* Updated hint if it changed */
 
 int 
-kv_put(uuid_t storage_uuid, /* Vvol uuid */
+kv_put(uid_t storage_uuid, /* Vvol uuid */
        uint8_t *key,
        int keylen,
        void *data,
@@ -67,7 +71,7 @@ kv_put(uuid_t storage_uuid, /* Vvol uuid */
        kv_storage_hint_t *outhint); /* Return hint for storage fastpath */
 
 int
-kv_delete(uuid_t storage_uuid, /* Vvol uuid */
+kv_delete(uid_t storage_uuid, /* Vvol uuid */
 	  uint8_t *key,
 	  int keylen,
 	  kv_txn_id txn_id);

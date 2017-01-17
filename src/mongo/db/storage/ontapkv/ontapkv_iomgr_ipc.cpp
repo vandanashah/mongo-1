@@ -153,7 +153,7 @@ bool Response::parsePutResponse(const char *buf,
 		return false;
 	}
 	*hint = resp.kvresp_put_hint;
-	*recId = resp.kvresp_record_id;	
+//	*recId = resp.kvresp_record_id;	
 	return true;
 }
 
@@ -164,7 +164,7 @@ bool Response::parseGetResponse(const char *buf, kv_storage_hint_t *hint, int *l
 		return false;
 	}
 	*len = resp.kvresp_get_datalen;
-	*hint = resp.kvresp_get_hint;
+//	*hint = resp.kvresp_get_hint;
 	_len = *len;
 	_buf = (char *)malloc(_len);
 	return true;
@@ -193,7 +193,7 @@ void Request::preparePutOne(std::string contid,
 
 	/* prepare key,data */
 	kv_put.kvreq_put_datalen = len;
-	kv_put.kvreq_put_txnid = 0;
+	kv_put.kvreq_put_txn_id = 0;
 
 	memcpy(_buf, &kv_hdr, sizeof(kv_hdr));
 	memcpy(_buf + sizeof(kv_hdr), &kv_put, sizeof(kv_put));
@@ -239,7 +239,7 @@ void Request::prepareGetOne(std::string contid,
 
 int64_t OntapKVIOMgrIPC::getNextRecordId()
 {
-        return _nextIdNum.fetchAndAdd(1);
+        return _nextIdNum.addAndFetch(1);
 }
 
 StatusWith<RecordId> 
@@ -313,7 +313,7 @@ OntapKVIOMgrIPC::updateRecord(OperationContext* txn,
 	if (!resp.parsePutResponse((char *)&respHeader, storageHint, &recId)) {
 		return Status(ErrorCodes::BadValue, "Put  failed");
 	}
-	return StatusWith<RecordId>(RecordId(recId));
+	return StatusWith<RecordId>(RecordId(oldLocation));
 }
 
 void OntapKVIOMgrIPC::deleteRecord(
@@ -337,21 +337,32 @@ public:
 			OntapKVIOMgrIPC *iomgr,
 			bool forward) :
 	OntapKVIterator(txn, forward),
-	_iomgr(iomgr),
-	_curr(0) {}
+	_iomgr(iomgr) {
+		if (_forward) {
+			_curr = _iomgr->getRsid() + 1;
+		} else {
+			_curr = _iomgr->_nextIdNum.load();
+		}
+	}
 
 	~OntapKVIteratorIPC() {}
 
     boost::optional<Record> next() {
 	RecordData rd;
-	RecordId id(_curr);
 
-	_curr = _forward ? _curr+1 : _curr-1;
+	invariant(checkRange() == true);
+	if (_forward && _curr > _iomgr->_nextIdNum.load()) {
+		return {};
+	} else if (!_forward && _curr == _iomgr->getRsid()) {
+		return {};
+	}
+	RecordId id(_curr);
 	bool result = _iomgr->readRecord(_txn,
 			    "dummy",
 			     id,
 			     NULL,
-				&rd); 
+				&rd);
+	_curr = _forward ? _curr+1 : _curr-1;
 	if (result) {
 		return {{id, rd}};
 	}
@@ -360,6 +371,7 @@ public:
     boost::optional<Record> seekExact(const RecordId& id) {
 	RecordData rd;
 
+	invariant(checkRange() == true);
 	bool result = _iomgr->readRecord(_txn,
 			    "dummy",
 			     id,
@@ -373,6 +385,9 @@ public:
 	}
 
 private:
+	bool checkRange() {
+		return ((_iomgr->getRsid() & _curr) ? true : false);
+	}
 	OntapKVIOMgrIPC *_iomgr;
     	int64_t _curr;
 };
