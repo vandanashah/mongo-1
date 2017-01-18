@@ -34,7 +34,7 @@ class OntapKVIOMgrIPC : public OntapKVIOMgr {
 public:
        OntapKVIOMgrIPC(int64_t rsid) : _rsid(rsid<<32) {
 		 std::cout << "IOMgrIPC Constructor\n";
-		_nextIdNum.store((_rsid << 32) | 0);
+		_nextIdNum.store(_rsid | 0);
        }
        /*
         * Write record persistently.
