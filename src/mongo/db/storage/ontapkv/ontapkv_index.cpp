@@ -46,6 +46,7 @@ public:
 		_index(index),
 		_forward(isForward),
 		_curr(),
+		_endPosition(),
 		_eof(false) {}
 
 	~OntapKVIndexCursor() {}
@@ -55,9 +56,39 @@ public:
 			_eof = true;
 			return;
 		} else {
-			_eof = false;
+    			std::multimap<const BSONObj, RecordId>::const_iterator it ;
+    			std::multimap<const BSONObj, RecordId>::const_iterator itend ;
+    			std::multimap<const BSONObj, RecordId>::const_iterator itr ;
+    			std::multimap<const BSONObj, RecordId>::const_iterator prev_itr ;
+			int elem_count = 0;
+			it = _index->_kvindex.find(key);
+			itend = _index->_kvindex.end();
+			if (it == itend) {
+				// No exact match. point to the key which is greater than the key
+				// passed to the function. In case of all the key is exhausted, point
+				// to the last key. 
+				for (itr = _index->_kvindex.begin(); itr != _index->_kvindex.end(); ++itr) {
+					int cmp = key.woCompare(itr->first, _index->_ordering, true);  
+					if (cmp <= 0) {  
+						break;
+					}
+					prev_itr = itr;
+					++elem_count;
+				}
+				if (elem_count == 0) {
+					// endkey is lesser than kvindex.begin()
+					_eof = true;
+				} else {
+					_eof = false;
+					_curr = prev_itr->first;
+					_endPosition = prev_itr->first;	
+				}
+			} else {
+				_eof = false;
+				_curr = it->first;
+				_endPosition = it->first;
+			}
 		}
-		_curr = key;
 	}
 #if 0
 	{
@@ -77,14 +108,15 @@ public:
 			return boost::none;
 		}
     	std::multimap<const BSONObj, RecordId>::const_iterator it;
-	//switch (_forward) {
+    	std::multimap<const BSONObj, RecordId>::const_iterator itend;
 	if (_forward) {
-	//	case true:
 		it = _index->_kvindex.lower_bound(_curr);
-		if (it != _index->_kvindex.end()) {
-			IndexKeyEntry ent(it->first, it->second);
+		itend = _index->_kvindex.find(_endPosition);
+
+		if (it != itend) {
 			++it;
-			if (it != _index->_kvindex.end()) {
+			IndexKeyEntry ent(it->first, it->second);
+			if (it != itend) {
 				_curr = it->first;
 			} else {
 				_eof = true;
@@ -96,14 +128,13 @@ public:
 			_curr = tmp;
 			return boost::none;
 		}
-	//	break;
 	} else {
-	//	case false:	
 		it = _index->_kvindex.upper_bound(_curr);
-		if (it != _index->_kvindex.begin()) {
-			IndexKeyEntry ent(it->first, it->second);
+		itend = _index->_kvindex.find(_endPosition);
+		if (it != itend) {
 			++it;
-			if (it != _index->_kvindex.begin()) {
+			IndexKeyEntry ent(it->first, it->second);
+			if (it != itend) {
 				_curr = it->first;
 			} else {
 				_eof = true;
@@ -115,11 +146,7 @@ public:
 			_curr = tmp;
 			return boost::none;
 		}
-	//	break;
-	//	default:
-	//	invariant(0);
-	//	return boost::none;
-	} //switch
+	}
 
 	}
 
@@ -127,9 +154,12 @@ public:
                                             bool inclusive,
                              RequestedInfo parts = kKeyAndLoc) {
 			
-    	std::multimap<const BSONObj, RecordId>::const_iterator it ;
-		it = _index->_kvindex.find(key);
-		if (it != _index->_kvindex.end()) {
+    		std::multimap<const BSONObj, RecordId>::const_iterator it ;
+		it = _index->_kvindex.lower_bound(key);
+		int cmp = key.woCompare(_endPosition, _index->_ordering, true);  
+		
+		if (_forward ? (cmp <= 0) : (cmp >= 0)) {
+			_curr = it->first;
 			return IndexKeyEntry(it->first, it->second);
 		}
 		return boost::none;
@@ -152,6 +182,7 @@ private:
 	const OntapKVIndex *_index;
 	const bool _forward;
 	BSONObj _curr;
+	BSONObj _endPosition;
 	bool _eof;
 };
 
