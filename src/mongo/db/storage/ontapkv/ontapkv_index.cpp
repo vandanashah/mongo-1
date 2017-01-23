@@ -18,6 +18,27 @@
 #include "mongo/db/storage/ontapkv/ontapkv_index.h"
 
 namespace mongo {
+namespace {
+bool hasFieldNames(const BSONObj& obj) {
+    BSONForEach(e, obj) {
+        if (e.fieldName()[0])
+            return true;
+    }
+    return false;
+}
+
+BSONObj stripFieldNames(const BSONObj& query) {
+    if (!hasFieldNames(query))
+        return query;
+
+    BSONObjBuilder bb;
+    BSONForEach(e, query) {
+        bb.appendAs(e, StringData());
+    }
+    return bb.obj();
+}
+} //namespace
+
 class OntapKVBulkBuilderInterface : public SortedDataBuilderInterface {
     MONGO_DISALLOW_COPYING(OntapKVBulkBuilderInterface);
 
@@ -47,6 +68,7 @@ public:
 		_forward(isForward),
 		_curr(),
 		_endPosition(),
+		endPositionSet(false),
 		_eof(false) {}
 
 	~OntapKVIndexCursor() {}
@@ -56,20 +78,21 @@ public:
 			_eof = true;
 			return;
 		} else {
+			const BSONObj finalkey = stripFieldNames(key);
     			std::multimap<const BSONObj, RecordId>::const_iterator it ;
     			std::multimap<const BSONObj, RecordId>::const_iterator itend ;
     			std::multimap<const BSONObj, RecordId>::const_iterator itr ;
     			std::multimap<const BSONObj, RecordId>::const_iterator prev_itr ;
 			int elem_count = 0;
-			it = _index->_kvindex.find(key);
+			it = _index->_kvindex.find(finalkey);
 			itend = _index->_kvindex.end();
 			if (it == itend) {
 				// No exact match. point to the key which is greater than the key
 				// passed to the function. In case of all the key is exhausted, point
-				// to the last key. 
+				// to the last key.
 				for (itr = _index->_kvindex.begin(); itr != _index->_kvindex.end(); ++itr) {
-					int cmp = key.woCompare(itr->first, _index->_ordering, true);  
-					if (cmp <= 0) {  
+					int cmp = finalkey.woCompare(itr->first, _index->_ordering, true);
+					if (cmp <= 0) {
 						break;
 					}
 					prev_itr = itr;
@@ -81,12 +104,14 @@ public:
 				} else {
 					_eof = false;
 					_curr = prev_itr->first;
-					_endPosition = prev_itr->first;	
+					_endPosition = prev_itr->first;
+					endPositionSet = true;
 				}
 			} else {
 				_eof = false;
 				_curr = it->first;
 				_endPosition = it->first;
+				endPositionSet = true;
 			}
 		}
 	}
@@ -155,13 +180,27 @@ public:
                              RequestedInfo parts = kKeyAndLoc) {
 			
     		std::multimap<const BSONObj, RecordId>::const_iterator it ;
-		it = _index->_kvindex.lower_bound(key);
-		int cmp = key.woCompare(_endPosition, _index->_ordering, true);  
+    		std::multimap<const BSONObj, RecordId>::const_iterator itr ;
+		const BSONObj finalkey = stripFieldNames(key);
+		StringBuilder sb_str;
+		sb_str << "Seeking key:";
+		sb_str << finalkey;
+		std::cout << sb_str.str() << '\n';
+		it = _index->_kvindex.lower_bound(finalkey);
+		if (endPositionSet) {
+			int cmp = finalkey.woCompare(_endPosition, _index->_ordering, true);  
 		
-		if (_forward ? (cmp <= 0) : (cmp >= 0)) {
-			_curr = it->first;
-			return IndexKeyEntry(it->first, it->second);
+			if (_forward ? (cmp <= 0) : (cmp >= 0)) {
+				_curr = it->first;
+				return IndexKeyEntry(it->first, it->second);
+			}
+		} else {
+			if (it != _index->_kvindex.end()) {
+				_curr = it->first;
+				return IndexKeyEntry(it->first, it->second);
+			}
 		}
+                                
 		return boost::none;
 	}
 
@@ -183,6 +222,7 @@ private:
 	const bool _forward;
 	BSONObj _curr;
 	BSONObj _endPosition;
+	bool endPositionSet;
 	bool _eof;
 };
 
@@ -209,17 +249,22 @@ Status OntapKVIndex::insert(OperationContext* txn,
                           const BSONObj& key,
                           const RecordId& id,
                           bool dupsAllowed) {
+	const BSONObj finalkey = stripFieldNames(key);
 	if (!dupsAllowed) {
-		indexMap::const_iterator it = _kvindex.find(key);
+		indexMap::const_iterator it = _kvindex.find(finalkey);
 		if (it != _kvindex.end()) {
 			StringBuilder sb;
-			sb << "DUP key in (col, key):";
+			sb << "DUP key in (col, finalkey):";
 			sb << _collectionNamespace;
 			sb << key;
 			return Status(ErrorCodes::DuplicateKey, sb.str());
 		}
 	}
-	_kvindex.insert(std::pair<const BSONObj,RecordId>(key, id));
+	StringBuilder sb_str;
+	sb_str << "Inserting key:";
+	sb_str << finalkey;
+	std::cout << sb_str.str() << '\n';
+	_kvindex.insert(std::pair<const BSONObj,RecordId>(finalkey, id));
 	return Status::OK(); 
 }
 void OntapKVIndex::unindex(OperationContext* txn,
@@ -227,7 +272,11 @@ void OntapKVIndex::unindex(OperationContext* txn,
                          const RecordId& id,
                          bool dupsAllowed) {
 	std::cout <<" Someone unindexing\n";
-	indexMap::iterator it = _kvindex.find(key);
+	StringBuilder sb_str;
+	sb_str << "deleting key:";
+	sb_str << key;
+	std::cout << sb_str.str() << '\n';
+	indexMap::iterator it = _kvindex.find(stripFieldNames(key));
 	_kvindex.erase(it);
 }
 
