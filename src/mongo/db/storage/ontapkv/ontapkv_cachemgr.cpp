@@ -26,7 +26,9 @@ int OntapKVCacheMgr::lookup(OperationContext *txn, int32_t container,
 	int index = generateHashKey(key);
 	invariant(index < CACHE_SIZE);
 
+	OntapKVCacheLock.lock_shared();
 	if (cache[index] == NULL) {
+		OntapKVCacheLock.unlock_shared();
 		return KVCACHE_NOT_FOUND;
 	} else {
 		OntapKVCacheEntry *entry = cache[index];
@@ -34,6 +36,7 @@ int OntapKVCacheMgr::lookup(OperationContext *txn, int32_t container,
 			entry = entry->getNext();
 		}
 		if (entry == NULL) {
+			OntapKVCacheLock.unlock_shared();
 			return KVCACHE_NOT_FOUND;
 		} else {
 			/*
@@ -48,17 +51,20 @@ int OntapKVCacheMgr::lookup(OperationContext *txn, int32_t container,
 			if (sizeof(storage_ctx) != data_ctx.getContext()) {
 				// Invalidate
 				invalidate(txn, container, id);
+				OntapKVCacheLock.unlock_shared();
 				return KVCACHE_NOT_FOUND;
 			} else {
 				// Copy metadata into cxt pointer
 				memcpy(hint, &storage_ctx, sizeof(storage_ctx));
 				if (data == NULL) {
+					OntapKVCacheLock.unlock_shared();
 					return KVCACHE_MD_ONLY;
 				} else {
 					int size = entry->getDataSize();
 					SharedBuffer buf_data = SharedBuffer::allocate(size);
 					memcpy(buf_data.get(), data, size);
 					*out = RecordData(buf_data, size);
+					OntapKVCacheLock.unlock_shared();
 					return KVCACHE_FOUND;
 				}
 			}	
@@ -73,6 +79,7 @@ bool OntapKVCacheMgr::insert(OperationContext *txn, int32_t container,
 	int index = generateHashKey(key);
 	invariant(index < CACHE_SIZE);
 
+	OntapKVCacheLock.lock();
 	if (cache[index] == NULL) {
 		cache[index] = new OntapKVCacheEntry(container, id, cxt, (void *) data, len, NULL);
 	} else {
@@ -85,9 +92,11 @@ bool OntapKVCacheMgr::insert(OperationContext *txn, int32_t container,
 			entry->setNext(new OntapKVCacheEntry(container, id, cxt, (void *) data, len, NULL));
 		} else {
 			// Entry already exists. Update
+			OntapKVCacheLock.unlock();
 			return update(txn, container, data, cxt, len, id);
 		}
 	}
+	OntapKVCacheLock.unlock();
 	return true;
 }
 
@@ -97,8 +106,10 @@ bool OntapKVCacheMgr::update(OperationContext *txn, int32_t container, const cha
 	int index = generateHashKey(key);
 	invariant(index < CACHE_SIZE);
 
+	OntapKVCacheLock.lock();
 	if (cache[index] == NULL) {
 		// Should have called insert
+		OntapKVCacheLock.unlock();
 		return false;
 	} else {
 		OntapKVCacheEntry *entry = cache[index];
@@ -107,6 +118,7 @@ bool OntapKVCacheMgr::update(OperationContext *txn, int32_t container, const cha
 		}
 		if (entry->getKey() != key) {
 			// Should have called insert
+			OntapKVCacheLock.unlock();
 			return false;
 		} else {
 			// Entry already exists. Update
@@ -117,6 +129,7 @@ bool OntapKVCacheMgr::update(OperationContext *txn, int32_t container, const cha
 			entry->setMetadata(cxt);
 		} 
 	}
+	OntapKVCacheLock.unlock();
 	return true;
 }
 
@@ -125,6 +138,7 @@ bool OntapKVCacheMgr::invalidate(OperationContext *txn, int32_t container, Recor
 	int index = generateHashKey(key);
 	invariant(index < CACHE_SIZE);
 
+	OntapKVCacheLock.lock();
 	if (cache[index] != NULL) {
 		OntapKVCacheEntry *prev_entry = NULL;
 		OntapKVCacheEntry *entry = cache[index];
@@ -144,6 +158,7 @@ bool OntapKVCacheMgr::invalidate(OperationContext *txn, int32_t container, Recor
 		}
 			
         }
+	OntapKVCacheLock.unlock();
 	return true;
 }
 

@@ -4,6 +4,7 @@
 #include "mongo/platform/atomic_word.h"
 #include "mongo/stdx/mutex.h"
 #include "mongo/util/concurrency/synchronization.h"
+#include "mongo/util/concurrency/rwlock.h"
 #include "mongo/util/fail_point_service.h"
 #include <iostream>
 #include "mongo/db/storage/ontapkv/kv_format.h"
@@ -167,7 +168,7 @@ private:
 
 class OntapKVCacheMgr {
 public:
-	OntapKVCacheMgr() {
+	OntapKVCacheMgr() : OntapKVCacheLock("kvcachelock") {
 		std::cout<<"CacheMgr: Starting\n";
 		cache = new OntapKVCacheEntry*[CACHE_SIZE];
 		for (int i = 0; i < CACHE_SIZE; i++) {
@@ -198,6 +199,7 @@ public:
 	bool invalidate(OperationContext *txn, int32_t container, RecordId id);
 private:
 	OntapKVCacheEntry **cache;
+	RWLock OntapKVCacheLock;
 };
 
 }//
