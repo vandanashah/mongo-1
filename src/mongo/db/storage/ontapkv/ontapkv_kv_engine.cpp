@@ -40,6 +40,7 @@
 #include "mongo/db/storage/ontapkv/ontapkv_recovery_unit.h"
 #include "mongo/db/storage/ontapkv/ontapkv_record_store.h"
 #include "mongo/db/storage/ontapkv/ontapkv_index.h"
+#include "mongo/db/storage/ontapkv/ontapkv_histogram.h"
 //#include "mongo/db/storage/ontapkv/ontapkv_cachemgr.h"
 
 namespace mongo {
@@ -61,7 +62,10 @@ OntapKVEngine::OntapKVEngine(const std::string& canonicalName,
 			<<path
 			<<cacheSizeGB
 			<<"\n";
-	cacheMgr = new OntapKVCacheMgr();
+	Histogram::Options opts;
+	opts.numBuckets = 11;
+        opts.bucketSize = 10;
+	cacheMgr = new OntapKVCacheMgr(opts);
 	_nextrsID.store(1);
 }
 

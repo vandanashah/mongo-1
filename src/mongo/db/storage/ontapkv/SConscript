@@ -12,6 +12,7 @@ env.Library(
             'ontapkv_iomgr_mock.cpp',
             'ontapkv_iomgr_ipc.cpp',
             'ontapkv_recovery_unit_mock.cpp',
+            'ontapkv_histogram.cpp',
 	],
 	)
 

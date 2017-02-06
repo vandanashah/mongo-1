@@ -8,6 +8,7 @@
 #include "mongo/util/fail_point_service.h"
 #include <iostream>
 #include "mongo/db/storage/ontapkv/kv_format.h"
+#include "mongo/db/storage/ontapkv/ontapkv_histogram.h"
 
 
 /*
@@ -146,6 +147,10 @@ public:
 		return (((int64_t) this->_container) + (this->_id).repr());
 	}
 
+	long long getSize() {
+		return (sizeof(int32_t) + sizeof(RecordId) + data_len + sizeof(StorageUberContext) + sizeof(OntapKVCacheEntry *)); 
+	}
+
 private:
 	int32_t _container;
 	RecordId _id;
@@ -168,7 +173,23 @@ private:
 
 class OntapKVCacheMgr {
 public:
-	OntapKVCacheMgr() : OntapKVCacheLock("kvcachelock") {
+	OntapKVCacheMgr(const Histogram::Options& opts) : OntapKVCacheLock("kvcachelock"),
+			    lookup_hist( opts ),
+			    write_hist( opts ),
+			    update_hist( opts ),
+			    cache_size(0),
+			    min_lookup_latency(0),
+			    max_lookup_latency(0),
+			    total_lookup_latency(0),
+			    numLookups(0),
+			    min_write_latency(0),
+			    max_write_latency(0),
+			    total_write_latency(0),
+			    numWrites(0),
+			    min_update_latency(0),
+			    max_update_latency(0),
+			    total_update_latency(0),
+			    numUpdates(0) {
 		std::cout<<"CacheMgr: Starting\n";
 		cache = new OntapKVCacheEntry*[CACHE_SIZE];
 		for (int i = 0; i < CACHE_SIZE; i++) {
@@ -187,6 +208,106 @@ public:
 		return ((key * 11400714819323198549ul) >> (64 - h_bits));
 	}
 
+	long long getCacheSize() {
+		return (cache_size + sizeof(RWLock) + (3 * sizeof(Histogram)) + (3 * sizeof(int64_t)) + (10 * sizeof(long long)));
+	}
+
+	long long getMinLookupLatency() {
+		return min_lookup_latency;
+	}
+
+	long long getMaxLookupLatency() {
+		return max_lookup_latency;
+	}
+
+	long long getAvgLookupLatency() {
+		return (total_lookup_latency/numLookups);
+	}
+
+	long long getMinWriteLatency() {
+		return min_write_latency;
+	}
+
+	long long getMaxWriteLatency() {
+		return max_write_latency;
+	}
+
+	long long getAvgWriteLatency() {
+		return (total_write_latency/numWrites);
+	}
+
+	long long getMinUpdateLatency() {
+		return min_update_latency;
+	}
+
+	long long getMaxUpdateLatency() {
+		return max_update_latency;
+	}
+
+	long long getAvgUpdateLatency() {
+		return (total_update_latency/numUpdates);
+	}
+
+	void setLookupLatency(long long latency) {
+		if (this->max_lookup_latency == 0) {
+			this->min_lookup_latency = latency;
+			this->max_lookup_latency = latency;
+		} else {
+			this->min_lookup_latency = std::min(this->min_lookup_latency, latency);
+			this->max_lookup_latency = std::max(this->max_lookup_latency, latency);
+		}
+		numLookups++;
+		total_lookup_latency += latency;
+	}
+		
+	void setWriteLatency(long long latency) {
+		if (this->max_write_latency == 0) {
+			this->min_write_latency = latency;
+			this->max_write_latency = latency;
+		} else {
+			this->min_write_latency = std::min(this->min_write_latency, latency);
+			this->max_write_latency = std::max(this->max_write_latency, latency);
+		}
+		numWrites++;
+		total_write_latency += latency;
+	}
+		
+	void setUpdateLatency(long long latency) {
+		if (this->max_update_latency == 0) {
+			this->min_update_latency = latency;
+			this->max_update_latency = latency;
+		} else {
+			this->min_update_latency = std::min(this->min_update_latency, latency);
+			this->max_update_latency = std::max(this->max_update_latency, latency);
+		}
+		numUpdates++;
+		total_update_latency += latency;
+	}
+
+	Histogram& getLookupHistogram() {
+		return lookup_hist;
+	}
+
+	Histogram& getWriteHistogram() {
+		return write_hist;
+	}
+
+	Histogram& getUpdateHistogram() {
+		return update_hist;
+	}
+
+	void setLookupHistogram(long long latency) {
+		this->lookup_hist.insert(latency);
+	}
+
+	void setWriteHistogram(long long latency) {
+		this->write_hist.insert(latency);
+	}
+
+	void setUpdateHistogram(long long latency) {
+		this->update_hist.insert(latency);
+	}
+
 	int lookup(OperationContext *txn, int32_t container,
 		   const RecordId& id, kv_storage_hint_t *hint,
 		   RecordData *out);
@@ -200,6 +321,24 @@ public:
 private:
 	OntapKVCacheEntry **cache;
 	RWLock OntapKVCacheLock;
+	Histogram lookup_hist;
+	Histogram write_hist;
+	Histogram update_hist;
+	/* cache size in bytes */
+	long long cache_size;
+	/* Latencies are in microseconds */ 
+	long long min_lookup_latency;
+	long long max_lookup_latency;
+	long long total_lookup_latency;
+	int64_t numLookups;
+	long long min_write_latency;
+	long long max_write_latency;
+	long long total_write_latency;
+	int64_t numWrites;
+	long long min_update_latency;
+	long long max_update_latency;
+	long long total_update_latency;
+	int64_t numUpdates; 
 };
 
 }//

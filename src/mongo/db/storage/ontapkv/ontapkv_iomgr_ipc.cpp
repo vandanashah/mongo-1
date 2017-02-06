@@ -257,12 +257,14 @@ OntapKVIOMgrIPC::writeRecord(OperationContext* txn,
 	
 	
 	recId = getNextRecordId();
+	Timer t;
 	req.preparePutOne(contid, data, len, RecordId(recId));
 	conn.sendRequest(req.getBuf(), req.getLen());
 	conn.recvResponse((char *)&respHeader, sizeof(respHeader));
 	if (!resp.parsePutResponse((char *)&respHeader, storageHint, &recId)) {
 		return Status(ErrorCodes::BadValue, "Put  failed");
 	}
+	std::cout << "Write record including protocol latency " << t.micros() << "us" << std::endl;
 	return StatusWith<RecordId>(RecordId(recId));
 }
 
@@ -278,6 +280,7 @@ bool OntapKVIOMgrIPC::readRecord(OperationContext* txn,
 	bool result;
 	int len;
 	
+	Timer t;
 	req.prepareGetOne(contid, id, storageHint);
 	conn.sendRequest(req.getBuf(), req.getLen());
 
@@ -288,6 +291,7 @@ bool OntapKVIOMgrIPC::readRecord(OperationContext* txn,
 		return false;
 	}
 	conn.recvResponse(resp.getBuf(), resp.getLen());
+	std::cout << "Read record including protocol latency " << t.micros() << "us" << std::endl;
 	RecordData rd = RecordData(resp.getBuf(), resp.getLen());
 	*out = rd.getOwned();
 	/* FIXME: handle change in context */

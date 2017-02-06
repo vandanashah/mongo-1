@@ -19,6 +19,7 @@
  */
 
 namespace mongo {
+
 int OntapKVCacheMgr::lookup(OperationContext *txn, int32_t container,
 		   const RecordId& id, kv_storage_hint_t *hint,
 		   RecordData *out) {
@@ -82,6 +83,7 @@ bool OntapKVCacheMgr::insert(OperationContext *txn, int32_t container,
 	OntapKVCacheLock.lock();
 	if (cache[index] == NULL) {
 		cache[index] = new OntapKVCacheEntry(container, id, cxt, (void *) data, len, NULL);
+		cache_size += cache[index]->getSize();
 	} else {
 		OntapKVCacheEntry *entry = cache[index];
 		while ((entry->getNext() != NULL) && (entry->getKey() != key)) {
@@ -90,6 +92,8 @@ bool OntapKVCacheMgr::insert(OperationContext *txn, int32_t container,
 		if (entry->getKey() != key) {
 			// Not found in hash but last entry in coalesced chain is reached. Insert 
 			entry->setNext(new OntapKVCacheEntry(container, id, cxt, (void *) data, len, NULL));
+			OntapKVCacheEntry *curr_ent = entry->getNext();
+			cache_size += curr_ent->getSize();
 		} else {
 			// Entry already exists. Update
 			OntapKVCacheLock.unlock();
@@ -97,6 +101,7 @@ bool OntapKVCacheMgr::insert(OperationContext *txn, int32_t container,
 		}
 	}
 	OntapKVCacheLock.unlock();
+	std::cout << "Cache size now is: " << cache_size << std::endl;
 	return true;
 }
 
@@ -123,13 +128,16 @@ bool OntapKVCacheMgr::update(OperationContext *txn, int32_t container, const cha
 		} else {
 			// Entry already exists. Update
 			char *olddata = (char *) entry->getData();
+			long long oldsize = entry->getSize();
 			free(olddata);
 			entry->setData((void *)data, len);
 			entry->setDataSize(len);
 			entry->setMetadata(cxt);
-		} 
+			cache_size = (cache_size - oldsize) + entry->getSize();
+		}
 	}
 	OntapKVCacheLock.unlock();
+	std::cout << "Cache size now is: " << cache_size << std::endl;
 	return true;
 }
 
@@ -142,6 +150,7 @@ bool OntapKVCacheMgr::invalidate(OperationContext *txn, int32_t container, Recor
 	if (cache[index] != NULL) {
 		OntapKVCacheEntry *prev_entry = NULL;
 		OntapKVCacheEntry *entry = cache[index];
+		cache_size -= entry->getSize();
 		while ((entry->getNext() != NULL) && (entry->getKey() != key)) {
 			prev_entry = entry;
 			entry = entry->getNext();
@@ -159,6 +168,7 @@ bool OntapKVCacheMgr::invalidate(OperationContext *txn, int32_t container, Recor
 			
         }
 	OntapKVCacheLock.unlock();
+	std::cout << "Cache size now is: " << cache_size << std::endl;
 	return true;
 }
 

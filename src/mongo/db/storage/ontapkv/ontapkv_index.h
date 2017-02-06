@@ -138,6 +138,7 @@ protected:
     std::string _indexName;
     typedef std::multimap<const BSONObj, RecordId> indexMap;
     indexMap _kvindex;
+    long long spaceInBytes;
     friend class OntapKVIndexCursor;
 };
 

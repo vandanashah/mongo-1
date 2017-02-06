@@ -13,6 +13,7 @@
 #include "mongo/util/mongoutils/str.h"
 #include "mongo/util/scopeguard.h"
 #include "mongo/util/time_support.h"
+#include "mongo/util/timer.h"
 
 #include "mongo/db/storage/ontapkv/ontapkv_record_store.h"
 #include "mongo/db/storage/ontapkv/ontapkv_container_mgr.h"
@@ -78,9 +79,14 @@ OntapKVRecordStore::insertRecord(OperationContext* txn,
 		return Status(ErrorCodes::BadValue, "Update failed");
 	}
 
+	Timer t;
 	cacheMgr->insert(txn, std::stoi("1234"), data, hint,
 				len, s.getValue());
-	
+	long long tm = t.micros(); 
+	cacheMgr->setWriteLatency(tm);
+	cacheMgr->setWriteHistogram(tm);
+	//std::cout << "Cache insert took " << t.micros() << "us" << std::endl;
+
 	_changeNumRecords(txn, 1);
 	_increaseDataSize(txn, len);
 	return s;
@@ -105,12 +111,17 @@ bool OntapKVRecordStore::findRecord(OperationContext* txn,
 					RecordData* out) const {
 	kv_storage_hint_t hint;
 	RecordData rd;
+	Timer t;
 
 	std::string containerId = contMgr->getContainerId(_ns);
 
 	/* Copy data or give out reference ?*/
 	int result = cacheMgr->lookup(txn, std::stoi("1234"), id,
 			&hint, out);
+	long long tm = t.micros();
+	cacheMgr->setLookupLatency(tm);
+	cacheMgr->setLookupHistogram(tm);
+	//std::cout << "Cache lookup took " << t.micros() << "us" << std::endl;
 	if (result == KVCACHE_FOUND) {
 		invariant(out != NULL);
 		return true;
@@ -203,10 +214,15 @@ OntapKVRecordStore::updateRecord(OperationContext* txn,
 	}
 
 	//cxt.setBytes((char *)"Context");
+	Timer t;
 	/* For now assume this will work if record already exists */
 	cacheMgr->insert(txn, std::stoi("1234"), data,
 				hint, len, s.getValue());
 	
+	long long tm = t.micros();
+	cacheMgr->setUpdateLatency(tm);
+	cacheMgr->setUpdateHistogram(tm);
+	//std::cout << "Cache update took " << t.micros() << "us" << std::endl;
 	/* FIXME: adjust delta
 	_increaseDataSize(txn, len - oldLen); */
 	return s;
@@ -262,6 +278,43 @@ void OntapKVRecordStore::appendCustomStats(OperationContext* txn,
                                               double scale) const {
 
 	std::cout << "appendCustomStats TBD\n";
+	StringData engineName("ontapKV");
+	BSONObjBuilder bob(result->subobjStart(engineName));
+
+	BSONObjBuilder cacheInfo(bob.subobjStart("cache"));
+	cacheInfo.appendNumber("Cache Size(In bytes)", cacheMgr->getCacheSize()); 
+	cacheInfo.appendNumber("Minimum Lookup Latency(in Microseconds)", cacheMgr->getMinLookupLatency()); 
+	cacheInfo.appendNumber("Maximum Lookup Latency(in Microseconds)", cacheMgr->getMaxLookupLatency()); 
+	cacheInfo.appendNumber("Average Lookup Latency(in Microseconds)", cacheMgr->getAvgLookupLatency()); 
+	cacheInfo.appendNumber("Minimum Write Latency(in Microseconds)", cacheMgr->getMinWriteLatency()); 
+	cacheInfo.appendNumber("Maximum Write Latency(in Microseconds)", cacheMgr->getMaxWriteLatency()); 
+	cacheInfo.appendNumber("Average Write Latency(in Microseconds)", cacheMgr->getAvgWriteLatency()); 
+	cacheInfo.appendNumber("Minimum Update Latency(in Microseconds)", cacheMgr->getMinUpdateLatency()); 
+	cacheInfo.appendNumber("Maximum Update Latency(in Microseconds)", cacheMgr->getMaxUpdateLatency()); 
+	cacheInfo.appendNumber("Average Update Latency(in Microseconds)", cacheMgr->getAvgUpdateLatency()); 
+
+	BSONObjBuilder hist(cacheInfo.subobjStart("Histogram"));
+	BSONObjBuilder *lookup_hist = new BSONObjBuilder(); 
+	(cacheMgr->getLookupHistogram()).appendHistogramStats(lookup_hist);
+	hist.append("Lookup", lookup_hist->obj());
+	delete lookup_hist;
+	BSONObjBuilder *write_hist = new BSONObjBuilder();	
+	(cacheMgr->getWriteHistogram()).appendHistogramStats(write_hist);
+	hist.append("Write", write_hist->obj());
+	delete write_hist;
+	BSONObjBuilder *update_hist = new BSONObjBuilder(); 
+	(cacheMgr->getWriteHistogram()).appendHistogramStats(update_hist);
+	hist.append("Update", update_hist->obj());
+	delete update_hist;
+
+#if 0
+	std::cout << "Printing Lookup Histogram\n";
+	(cacheMgr->getLookupHistogram()).printHistogram();
+	std::cout << "Printing Write Histogram\n";
+	(cacheMgr->getWriteHistogram()).printHistogram();
+	std::cout << "Printing Update Histogram\n";
+	(cacheMgr->getUpdateHistogram()).printHistogram();
+#endif
 }
 void OntapKVRecordStore::updateStatsAfterRepair(OperationContext* txn,
                                         long long numRecords,

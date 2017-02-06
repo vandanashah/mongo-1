@@ -237,7 +237,8 @@ OntapKVIndex::OntapKVIndex(OperationContext* ctx,
     : _ordering(Ordering::make(desc->keyPattern())),
       _uri(uri),
       _collectionNamespace(desc->parentNS()),
-      _indexName(desc->indexName()) {
+      _indexName(desc->indexName()),
+      spaceInBytes(0){
 
 }
 
@@ -264,7 +265,11 @@ Status OntapKVIndex::insert(OperationContext* txn,
 	sb_str << "Inserting key:";
 	sb_str << finalkey;
 	std::cout << sb_str.str() << '\n';
+	std::cout << "Inserting key of size:";
+	std::cout << finalkey.objsize() << '\n';
 	_kvindex.insert(std::pair<const BSONObj,RecordId>(finalkey, id));
+	
+	spaceInBytes += (finalkey.objsize() + sizeof(int64_t) + (3 * sizeof(void *)));
 	return Status::OK(); 
 }
 void OntapKVIndex::unindex(OperationContext* txn,
@@ -312,8 +317,7 @@ Status OntapKVIndex::touch(OperationContext* txn) const {
 }
 
 long long OntapKVIndex::getSpaceUsedBytes(OperationContext* txn) const {
-#define DEFAULT_KEY_SIZE (64)
-	return (_kvindex.size() * (sizeof(int64_t) + DEFAULT_KEY_SIZE));
+	return spaceInBytes;
 }
 
 } //namespace mongo
