@@ -7,6 +7,7 @@
 #include "mongo/util/concurrency/synchronization.h"
 #include "mongo/util/fail_point_service.h"
 
+#include "mongo/db/storage/ontapkv/ontapkv_cachemgr.h"
 #include "mongo/db/storage/ontapkv/ontapkv_iomgr.h"
 #pragma once
 
@@ -32,9 +33,10 @@ private:
 #endif
 class OntapKVIOMgrIPC : public OntapKVIOMgr {
 public:
-       OntapKVIOMgrIPC(int64_t rsid) : _rsid(rsid<<32) {
+       OntapKVIOMgrIPC(int64_t rsid, OntapKVCacheMgr *cachemgr) : _rsid(rsid<<32) {
 		 std::cout << "IOMgrIPC Constructor\n";
 		_nextIdNum.store(_rsid | 0);
+		cacheMgr = cachemgr;
        }
        /*
         * Write record persistently.
@@ -84,8 +86,10 @@ private:
 #endif
 
        int64_t getRsid() { return _rsid; }
+       OntapKVCacheMgr *getCacheMgr() { return cacheMgr; }
        AtomicInt64 _nextIdNum;
        int64_t  _rsid;
+       OntapKVCacheMgr *cacheMgr;
 
        int64_t getNextRecordId();
        friend class OntapKVIteratorIPC;

@@ -24,6 +24,7 @@
 
 namespace mongo {
 #define SERVER "0.0.0.0"
+//#define SERVER "10.140.44.215"
 #define PORT 1919
 
 /*
@@ -361,10 +362,26 @@ public:
 		return {};
 	}
 	RecordId id(_curr);
+	kv_storage_hint_t hint;
+	Timer t;
+
+        /* Copy data or give out reference ?*/
+        int lookup_result = _iomgr->getCacheMgr()->lookup(_txn, std::stoi("1234"), id,
+							  &hint, &rd);
+        long long tm = t.micros();
+        _iomgr->getCacheMgr()->setLookupLatency(tm);
+        _iomgr->getCacheMgr()->setLookupHistogram(tm);
+        if (lookup_result == KVCACHE_FOUND) {
+		_curr = _forward ? _curr+1 : _curr-1;
+                return {{id, rd}};
+        }
+        if (lookup_result == KVCACHE_NOT_FOUND) {
+                bzero(&hint, sizeof(hint));
+        }
 	bool result = _iomgr->readRecord(_txn,
 			    "dummy",
 			     id,
-			     NULL,
+			     &hint,
 				&rd);
 	_curr = _forward ? _curr+1 : _curr-1;
 	if (result) {
@@ -376,10 +393,27 @@ public:
 	RecordData rd;
 
 	invariant(checkRange() == true);
+
+	kv_storage_hint_t hint;
+	Timer t;
+
+        /* Copy data or give out reference ?*/
+        int lookup_result = _iomgr->getCacheMgr()->lookup(_txn, std::stoi("1234"), id,
+							  &hint, &rd);
+        long long tm = t.micros();
+        _iomgr->getCacheMgr()->setLookupLatency(tm);
+        _iomgr->getCacheMgr()->setLookupHistogram(tm);
+        if (lookup_result == KVCACHE_FOUND) {
+		_curr = id.repr();
+                return {{id, rd}};
+        }
+        if (lookup_result == KVCACHE_NOT_FOUND) {
+                bzero(&hint, sizeof(hint));
+        }
 	bool result = _iomgr->readRecord(_txn,
 			    "dummy",
 			     id,
-			     NULL,
+			     &hint,
 				&rd); 
 	if (result) {
 		_curr = id.repr();

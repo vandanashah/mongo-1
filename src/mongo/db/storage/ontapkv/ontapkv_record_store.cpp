@@ -45,7 +45,7 @@ OntapKVRecordStore::OntapKVRecordStore(OperationContext* txn,
 	contMgr = new OntapKVContainerMgr();
 	//ioMgr = new OntapKVIOMgr_mock(rsID);
 	cacheMgr = cachemgr;
-	ioMgr = new OntapKVIOMgrIPC(rsID);
+	ioMgr = new OntapKVIOMgrIPC(rsID, cachemgr);
 }
 
 OntapKVRecordStore::~OntapKVRecordStore() {
