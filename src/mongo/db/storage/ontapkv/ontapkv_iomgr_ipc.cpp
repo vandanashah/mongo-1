@@ -23,9 +23,7 @@
 #include <arpa/inet.h>
 
 namespace mongo {
-#define SERVER "0.0.0.0"
 //#define SERVER "10.140.44.215"
-#define PORT 1919
 
 /*
  * IPC client implementation
@@ -36,30 +34,17 @@ namespace mongo {
  * the other client
  */
 
-class IPCConnection {
-public:
-	IPCConnection(const char *addr, int port) :
-			 _addr(addr), _port(port) {
-		getConnection();
-	}
-	~IPCConnection() { close(_sock);}
-	void getConnection();
-	void sendRequest(const char *buf, int len) {
-		int result = send(_sock, buf, len, 0);
-		invariant(result == len);
-	}
-	int recvResponse(char *buf, int len) {
-		/* Header first */
-		int result = recv(_sock, buf, len, 0);
-		invariant(result == len);
-		std::cout<<"GOT response"; return 0;
-	}
-private:
-	const char *_addr;
-	int _port;
-	int _sock;
+void IPCConnection::sendRequest(const char *buf, int len) {
+	int result = send(_sock, buf, len, 0);
+	invariant(result == len);
+}
 
-};
+int IPCConnection::recvResponse(char *buf, int len) {
+	/* Header first */
+	int result = recv(_sock, buf, len, 0);
+	invariant(result == len);
+	std::cout<<"GOT response"; return 0;
+}
 
 void IPCConnection::getConnection()
 {
@@ -154,7 +139,7 @@ bool Response::parsePutResponse(const char *buf,
 		return false;
 	}
 	*hint = resp.kvresp_put_hint;
-//	*recId = resp.kvresp_record_id;	
+//	*recId = resp.kvresp_record_id;
 	return true;
 }
 
@@ -181,7 +166,7 @@ void Request::preparePutOne(std::string contid,
 
 	kv_put.kvreq_put_keylen = getRecordIdStr(id, idBuf);
 	_len = sizeof(kvreq_header_t) +
-		sizeof(kvreq_put_one_t) + 
+		sizeof(kvreq_put_one_t) +
 		+ kv_put.kvreq_put_keylen +len;
 		
 	_buf = (char *)malloc(_len);
@@ -221,7 +206,7 @@ void Request::prepareGetOne(std::string contid,
 	_len = sizeof(kvreq_header_t) +
 		sizeof(kvreq_get_one_t) +
 		kv_get.kvreq_get_keylen;
-		
+
 	_buf = (char *)malloc(_len);
 	/* prepare header */
 	kv_hdr.kvreq_magic = 0x4B56;
@@ -235,7 +220,7 @@ void Request::prepareGetOne(std::string contid,
 	}
 	memcpy(_buf, &kv_hdr, sizeof(kv_hdr));
 	memcpy(_buf+sizeof(kv_hdr), &kv_get, sizeof(kv_get));
-	memcpy(_buf+sizeof(kv_hdr) + sizeof(kv_get), idBuf.c_str(), kv_get.kvreq_get_keylen); 
+	memcpy(_buf+sizeof(kv_hdr) + sizeof(kv_get), idBuf.c_str(), kv_get.kvreq_get_keylen);
 }
 
 int64_t OntapKVIOMgrIPC::getNextRecordId()
@@ -250,18 +235,19 @@ OntapKVIOMgrIPC::writeRecord(OperationContext* txn,
 				int len,
 				kv_storage_hint_t *storageHint) {
 
-	IPCConnection conn(SERVER, PORT);
+	int conn_no;
+	IPCConnection *conn = conn_cache->getConnection(&conn_no);
 	Request req(KV_PUT_ONE);
 	kvresp_put_one_t respHeader;
 	int64_t recId;
 	Response resp;
 	
-	
 	recId = getNextRecordId();
 	Timer t;
 	req.preparePutOne(contid, data, len, RecordId(recId));
-	conn.sendRequest(req.getBuf(), req.getLen());
-	conn.recvResponse((char *)&respHeader, sizeof(respHeader));
+	conn->sendRequest(req.getBuf(), req.getLen());
+	conn->recvResponse((char *)&respHeader, sizeof(respHeader));
+	conn_cache->dropConnection(conn_no);
 	if (!resp.parsePutResponse((char *)&respHeader, storageHint, &recId)) {
 		return Status(ErrorCodes::BadValue, "Put  failed");
 	}
@@ -274,28 +260,31 @@ bool OntapKVIOMgrIPC::readRecord(OperationContext* txn,
 			 const RecordId& id,
 			 kv_storage_hint_t *storageHint,
 			 RecordData* out) {
-	IPCConnection conn(SERVER, PORT);
+	int conn_no;
+        IPCConnection *conn = conn_cache->getConnection(&conn_no);
 	Request req(KV_GET_ONE);
 	Response resp;
 	kvresp_get_one_t getResp;
 	bool result;
 	int len;
-	
+
 	Timer t;
 	req.prepareGetOne(contid, id, storageHint);
-	conn.sendRequest(req.getBuf(), req.getLen());
+	conn->sendRequest(req.getBuf(), req.getLen());
 
 	/* header */
-	conn.recvResponse((char *)&getResp, sizeof(getResp));
+	conn->recvResponse((char *)&getResp, sizeof(getResp));
 	result = resp.parseGetResponse((char *)&getResp, storageHint, &len);
 	if (result == false) {
+		conn_cache->dropConnection(conn_no);
 		return false;
 	}
-	conn.recvResponse(resp.getBuf(), resp.getLen());
+	conn->recvResponse(resp.getBuf(), resp.getLen());
 	std::cout << "Read record including protocol latency " << t.micros() << "us" << std::endl;
 	RecordData rd = RecordData(resp.getBuf(), resp.getLen());
 	*out = rd.getOwned();
 	/* FIXME: handle change in context */
+	conn_cache->dropConnection(conn_no);
 	return true;
 }
 
@@ -306,15 +295,17 @@ OntapKVIOMgrIPC::updateRecord(OperationContext* txn,
 				const char* data,
 				int len,
 		        	kv_storage_hint_t *storageHint) {
-	IPCConnection conn(SERVER, PORT);
+	int conn_no;
+	IPCConnection *conn = conn_cache->getConnection(&conn_no);
 	Request req(KV_PUT_ONE);
 	kvresp_put_one_t respHeader;
 	int64_t recId;
 	Response resp;
-	
+
 	req.preparePutOne(contid, data, len, oldLocation);
-	conn.sendRequest(req.getBuf(), req.getLen());
-	conn.recvResponse((char *)&respHeader, sizeof(respHeader));
+	conn->sendRequest(req.getBuf(), req.getLen());
+	conn->recvResponse((char *)&respHeader, sizeof(respHeader));
+	conn_cache->dropConnection(conn_no);
 	if (!resp.parsePutResponse((char *)&respHeader, storageHint, &recId)) {
 		return Status(ErrorCodes::BadValue, "Put  failed");
 	}
@@ -328,12 +319,14 @@ void OntapKVIOMgrIPC::deleteRecord(
 	/*
 	send delete to the other side
 	*/
-	IPCConnection conn(SERVER, PORT);
+	//int conn_no;
+	//IPCConnection *conn = conn_cache->getConnection(&conn_no);
 	Request req(KV_DEL_ONE);
-	
+
 	std::cout << "DEL on id:" <<id.repr()<<"\n";
 	req.prepareDelOne(contid, id);
-//	conn.sendRequest(req.getBuf(), req.getLen());
+//	conn->sendRequest(req.getBuf(), req.getLen());
+	//conn_cache->dropConnection(conn_no);
 }
 
 class OntapKVIteratorIPC : public OntapKVIterator {

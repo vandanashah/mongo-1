@@ -32,6 +32,7 @@ OntapKVRecordStore::OntapKVRecordStore(OperationContext* txn,
                   bool isCapped,
                   bool isEphemeral,
 		  OntapKVCacheMgr *cachemgr,
+		  IPCConnectionCache *conn_cache,
 		  int64_t rsID,
                   int64_t cappedMaxSize,
                   int64_t cappedMaxDocs) :
@@ -45,7 +46,7 @@ OntapKVRecordStore::OntapKVRecordStore(OperationContext* txn,
 	contMgr = new OntapKVContainerMgr();
 	//ioMgr = new OntapKVIOMgr_mock(rsID);
 	cacheMgr = cachemgr;
-	ioMgr = new OntapKVIOMgrIPC(rsID, cachemgr);
+	ioMgr = new OntapKVIOMgrIPC(rsID, cachemgr, conn_cache);
 }
 
 OntapKVRecordStore::~OntapKVRecordStore() {

@@ -44,6 +44,8 @@
 //#include "mongo/db/storage/ontapkv/ontapkv_cachemgr.h"
 
 namespace mongo {
+#define SERVER "0.0.0.0"
+#define PORT 1919
 
 OntapKVEngine::OntapKVEngine(const std::string& canonicalName,
                        const std::string& path,
@@ -66,6 +68,7 @@ OntapKVEngine::OntapKVEngine(const std::string& canonicalName,
 	opts.numBuckets = 11;
         opts.bucketSize = 10;
 	cacheMgr = new OntapKVCacheMgr(opts);
+	IPCConnCache = new IPCConnectionCache(SERVER, PORT); 
 	_nextrsID.store(1);
 }
 
@@ -95,7 +98,7 @@ Status OntapKVEngine::createRecordStore(OperationContext* opCtx,
 		return Status::OK();
 	}
 	int64_t rsID = nextRecordStoreID();
-	rs = new OntapKVRecordStore(opCtx, ns, ident, "OntapKVEngine", false, false, cacheMgr, rsID); 
+	rs = new OntapKVRecordStore(opCtx, ns, ident, "OntapKVEngine", false, false, cacheMgr, IPCConnCache, rsID); 
 	invariant(rs);
 	_recordStores[ns.toString()] = rs;
 	return Status::OK();

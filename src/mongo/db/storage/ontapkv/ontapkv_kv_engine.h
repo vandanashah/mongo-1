@@ -40,6 +40,7 @@
 #include "mongo/util/elapsed_tracker.h"
 #include "mongo/db/storage/ontapkv/ontapkv_record_store.h"
 #include "mongo/db/storage/ontapkv/ontapkv_cachemgr.h"
+#include "mongo/db/storage/ontapkv/ontapkv_iomgr_ipc.h"
 
 namespace mongo {
 
@@ -161,6 +162,7 @@ private:
     typedef std::map<std::string, OntapKVRecordStore *> OntapKVStores;
 	OntapKVStores _recordStores;
 	OntapKVCacheMgr *cacheMgr;
+	IPCConnectionCache *IPCConnCache;
     AtomicInt64 _nextrsID;
 };
 }

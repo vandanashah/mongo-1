@@ -58,6 +58,7 @@ class OntapKVSizeStorer;
 class OntapKVContainerMgr;
 class OntapKVIOMgr;
 class OntapKVCacheMgr;
+class IPCConnectionCache;
 
 extern const std::string kOntapKVEngineName;
 typedef std::list<RecordId> SortedRecordIds;
@@ -94,6 +95,7 @@ public:
                           bool isCapped,
                           bool isEphemeral,
 			  OntapKVCacheMgr *cacheMgr,	
+			  IPCConnectionCache *conn_cache,
 			  int64_t rsid,
                           int64_t cappedMaxSize = -1,
                           int64_t cappedMaxDocs = -1);
